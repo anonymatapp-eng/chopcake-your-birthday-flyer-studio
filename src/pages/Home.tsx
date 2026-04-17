@@ -15,25 +15,25 @@ export default function Home() {
 
   return (
     <div className="container py-6 md:py-10 max-w-5xl space-y-8">
-      <section className="relative overflow-hidden rounded-3xl gradient-hero p-6 md:p-10 shadow-glow animate-float-up">
-        <div className="absolute inset-0 bg-background/10" />
+      <section className="relative overflow-hidden rounded-3xl gradient-hero border border-border/70 p-8 md:p-12 shadow-elev-sm animate-float-up">
+        <div className="absolute inset-0 bg-background/35" />
         <div className="relative space-y-4 max-w-xl">
-          <div className="inline-flex items-center gap-2 rounded-full bg-background/20 backdrop-blur px-3 py-1 text-xs font-medium text-white">
+          <div className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground border border-border/70">
             <Sparkles className="h-3 w-3" /> {reminder ?? `Welcome${profile ? `, ${profile.displayName}` : ""}`}
           </div>
-          <h1 className="font-display text-3xl md:text-5xl font-bold text-white leading-tight">
+          <h1 className="font-display text-3xl md:text-5xl font-semibold text-foreground leading-tight">
             Make every birthday<br />feel unforgettable.
           </h1>
-          <p className="text-white/85 text-sm md:text-base max-w-md">
+          <p className="text-muted-foreground text-sm md:text-base max-w-md">
             Create a beautiful flyer in seconds. Never miss the dates that matter.
           </p>
           <div className="flex flex-wrap gap-3 pt-2">
-            <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-white/90 shadow-elev-md rounded-full font-semibold">
+            <Button asChild size="lg" className="gradient-primary text-primary-foreground hover:opacity-95 shadow-elev-sm rounded-full font-medium">
               <Link to="/create">
                 <Sparkles className="h-4 w-4" /> Create a Birthday Flyer
               </Link>
             </Button>
-            <Button asChild size="lg" variant="ghost" className="bg-background/15 text-white hover:bg-background/25 rounded-full font-semibold">
+            <Button asChild size="lg" variant="outline" className="bg-background text-foreground hover:bg-muted rounded-full font-medium border-border/80">
               <Link to="/birthdays"><Plus className="h-4 w-4" /> Add Birthday</Link>
             </Button>
           </div>

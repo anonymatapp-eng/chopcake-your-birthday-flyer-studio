@@ -1,8 +1,11 @@
+import { useEffect, useRef } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Cake, Compass, Home, LogOut, Settings, Sparkles, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   { to: "/", label: "Home", icon: Home },
@@ -15,6 +18,35 @@ const navItems = [
 export default function AppShell() {
   const { role, signOut } = useAuth();
   const isAdmin = role === "admin";
+  const seenTemplateIds = useRef(new Set<string>());
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("template-notifications")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "templates" },
+        (payload) => {
+          const row = payload.new as { id?: string; name?: string; emoji?: string; active?: boolean };
+
+          // Avoid duplicate notifications when reconnects/dev re-renders happen.
+          if (!row.id || seenTemplateIds.current.has(row.id)) return;
+          seenTemplateIds.current.add(row.id);
+
+          if (row.active === false) return;
+
+          toast({
+            title: "New template available",
+            description: `${row.emoji ?? "🎉"} ${row.name ?? "A new design"} is ready to use.`,
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
