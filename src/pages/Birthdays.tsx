@@ -266,8 +266,23 @@ function BirthdayDialog({ editing, onClose }: { editing: Birthday | null; onClos
           <Label>Private notes</Label>
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Loves matcha…" rows={2} />
         </div>
+        {permission !== "granted" && (
+          <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs flex items-start gap-2">
+            <Bell className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+            <div>
+              <div className="font-semibold text-foreground">Notifications required</div>
+              <p className="text-muted-foreground">
+                {permission === "denied"
+                  ? "Notifications are blocked. Enable them in your browser site settings to save birthdays."
+                  : permission === "unsupported"
+                  ? "Your browser doesn't support notifications."
+                  : "Your browser will ask for permission so we can remind you of birthdays."}
+              </p>
+            </div>
+          </div>
+        )}
         <Button onClick={save} disabled={busy} className="w-full gradient-primary text-primary-foreground">
-          {busy ? "Saving…" : editing ? "Save changes" : "Add birthday"}
+          {busy ? "Saving…" : permission === "granted" ? (editing ? "Save changes" : "Add birthday") : "Allow notifications & save"}
         </Button>
       </div>
     </DialogContent>
