@@ -108,7 +108,7 @@ export default function TemplateEditor({ editing, onClose }: Props) {
     name,
     emoji,
     category,
-    background: background || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1080' height='1920'><rect width='1080' height='1920' fill='%23222'/></svg>",
+    background: background || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1080' height='1080'><rect width='1080' height='1080' fill='%23222'/></svg>",
     photoZone,
     nameZone,
     messageZone,
@@ -252,7 +252,7 @@ interface ZoneCanvasProps {
 
 function ZoneCanvas({ template, editable, testMode, setPhotoZone, setNameZone, setMessageZone }: ZoneCanvasProps) {
   const W = 320;
-  const H = W / (1080 / 1920);
+  const H = W;
   const ref = useRef<HTMLDivElement>(null);
 
   if (testMode) {

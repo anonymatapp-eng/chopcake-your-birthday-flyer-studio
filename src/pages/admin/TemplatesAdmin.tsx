@@ -82,7 +82,7 @@ export default function TemplatesAdmin() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {sorted.map((t) => (
             <Card key={t.id} className="overflow-hidden bg-card-elevated border-border/60">
-              <div className="aspect-[9/16] relative">
+              <div className="aspect-square relative">
                 <img src={t.background} alt={t.name} className="absolute inset-0 h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                 <div className="absolute top-2 right-2">

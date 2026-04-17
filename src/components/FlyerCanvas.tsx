@@ -8,13 +8,13 @@ interface Props {
   message: string;
   photo?: string;
   watermark?: boolean;
-  // Render width in px — height auto-derived from 9:16 ratio
+  // Render width in px — height auto-derived from 1:1 ratio
   width?: number;
   className?: string;
   showZones?: boolean;
 }
 
-const RATIO = 1080 / 1920;
+const RATIO = 1;
 
 const FlyerCanvas = forwardRef<HTMLDivElement, Props>(function FlyerCanvas(
   { template, name, message, photo, watermark = true, width = 360, className, showZones = false },

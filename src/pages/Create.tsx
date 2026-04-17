@@ -65,7 +65,7 @@ export default function Create() {
     if (!exportRef.current || !template || !user || !profile) return;
     setExporting(true);
     try {
-      const dataUrl = await toPng(exportRef.current, { pixelRatio: 1, cacheBust: true, width: 1080, height: 1920 });
+      const dataUrl = await toPng(exportRef.current, { pixelRatio: 1, cacheBust: true, width: 1080, height: 1080 });
       const a = document.createElement("a");
       a.href = dataUrl;
       a.download = `chopcake-${(name || "flyer").toLowerCase().replace(/\s+/g, "-")}.png`;
@@ -125,7 +125,7 @@ export default function Create() {
                   key={t.id}
                   onClick={() => setTemplateId(t.id)}
                   className={cn(
-                    "group relative rounded-2xl overflow-hidden aspect-[9/16] border-2 transition-spring text-left",
+                    "group relative rounded-2xl overflow-hidden aspect-square border-2 transition-spring text-left",
                     templateId === t.id ? "border-primary shadow-glow" : "border-transparent hover:border-border",
                   )}
                 >

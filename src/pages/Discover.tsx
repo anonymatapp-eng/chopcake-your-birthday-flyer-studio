@@ -32,7 +32,7 @@ export default function Discover() {
                 <Link
                   key={t.id}
                   to={`/create?template=${t.id}`}
-                  className="group relative aspect-[9/16] rounded-2xl overflow-hidden border border-border/60 hover:border-primary/40 transition-spring shadow-elev-sm"
+                  className="group relative aspect-square rounded-2xl overflow-hidden border border-border/60 hover:border-primary/40 transition-spring shadow-elev-sm"
                 >
                   <img src={t.background} alt={t.name} className="absolute inset-0 h-full w-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
