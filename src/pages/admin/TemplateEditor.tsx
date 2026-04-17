@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import FlyerCanvas from "@/components/FlyerCanvas";
 import type { Template, Zone } from "@/types";
-import { storage } from "@/lib/storage";
+import { templateApi } from "@/hooks/useData";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +43,7 @@ export default function TemplateEditor({ editing, onClose }: Props) {
     r.readAsDataURL(file);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!background) {
       toast({ title: "Upload a background image", variant: "destructive" });
       return;
@@ -67,9 +67,13 @@ export default function TemplateEditor({ editing, onClose }: Props) {
       usageCount: editing?.usageCount ?? 0,
       createdAt: editing?.createdAt ?? Date.now(),
     };
-    storage.upsertTemplate(t);
-    toast({ title: editing ? "Template updated" : "Template created 🎉" });
-    onClose();
+    try {
+      await templateApi.upsert(t);
+      toast({ title: editing ? "Template updated" : "Template created 🎉" });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Couldn't save", description: e.message, variant: "destructive" });
+    }
   };
 
   const previewTemplate: Template = {
