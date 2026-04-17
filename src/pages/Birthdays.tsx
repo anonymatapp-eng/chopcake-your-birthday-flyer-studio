@@ -123,7 +123,6 @@ export default function Birthdays() {
             <p className="text-sm text-muted-foreground mb-4">Add your first birthday to get started.</p>
             <div className="flex gap-2 justify-center">
               <Button onClick={() => { setEditing(null); setOpen(true); }}><Plus className="h-4 w-4" /> Add birthday</Button>
-              <Button variant="outline" onClick={() => storage.loadDemoBirthdays()}>Load demo data</Button>
             </div>
           </Card>
         ) : (

@@ -93,7 +93,7 @@ export default function Profile() {
             <li>💬 AI-generated personalized messages</li>
             <li>📤 Schedule auto-send for birthdays</li>
           </ul>
-          <Button className="mt-4 bg-white text-foreground hover:bg-white/90 rounded-full font-semibold">
+          <Button className="mt-4 bg-white text-slate-900 hover:bg-white/90 rounded-full font-semibold">
             <Sparkles className="h-4 w-4" /> Try Pro free
           </Button>
         </div>

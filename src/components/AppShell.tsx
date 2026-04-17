@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Cake, Compass, Home, Sparkles, User } from "lucide-react";
+import { Cake, Compass, Home, Settings, Sparkles, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -41,12 +41,21 @@ export default function AppShell() {
               </NavLink>
             ))}
           </nav>
-          <NavLink
-            to="/profile"
-            className="h-9 w-9 rounded-full gradient-cool flex items-center justify-center text-sm font-semibold"
-          >
-            🙂
-          </NavLink>
+          <div className="flex items-center gap-2">
+            <NavLink
+              to="/admin"
+              title="Admin"
+              className="h-9 w-9 rounded-full bg-muted hover:bg-muted/70 flex items-center justify-center text-muted-foreground hover:text-foreground transition-smooth"
+            >
+              <Settings className="h-4 w-4" />
+            </NavLink>
+            <NavLink
+              to="/profile"
+              className="h-9 w-9 rounded-full gradient-cool flex items-center justify-center text-sm font-semibold"
+            >
+              🙂
+            </NavLink>
+          </div>
         </div>
       </header>
 
@@ -57,7 +66,16 @@ export default function AppShell() {
             <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center text-base">🎂</div>
             <span className="font-display font-bold">ChopCake</span>
           </NavLink>
-          <NavLink to="/profile" className="h-8 w-8 rounded-full gradient-cool" />
+          <div className="flex items-center gap-2">
+            <NavLink
+              to="/admin"
+              title="Admin"
+              className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground"
+            >
+              <Settings className="h-4 w-4" />
+            </NavLink>
+            <NavLink to="/profile" className="h-8 w-8 rounded-full gradient-cool" />
+          </div>
         </div>
       </header>
 
