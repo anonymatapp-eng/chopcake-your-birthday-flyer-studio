@@ -1,5 +1,4 @@
-import type { Birthday } from "@/types";
-import { storage } from "@/lib/storage";
+import type { Birthday, Prefs } from "@/types";
 import { daysUntil, nextOccurrence } from "@/lib/birthdays";
 
 let scheduled: number[] = [];
@@ -17,26 +16,22 @@ function clearScheduled() {
   scheduled = [];
 }
 
-export function scheduleReminders() {
+export function scheduleReminders(list: Birthday[], prefs: Prefs | null) {
   if (typeof window === "undefined") return;
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const prefs = storage.getPrefs();
-  if (!prefs.notificationsEnabled) return;
+  if (!prefs?.notificationsEnabled) return;
 
   clearScheduled();
   const now = new Date();
-  const horizon = 24 * 60 * 60 * 1000; // 24h
-  const list = storage.getBirthdays();
+  const horizon = 24 * 60 * 60 * 1000;
   list.forEach((b) => scheduleOne(b, now, horizon, prefs.reminderHour));
 }
 
 function scheduleOne(b: Birthday, now: Date, horizon: number, hour: number) {
   const next = nextOccurrence(b, now);
-  // Day-before reminder
   const dayBefore = new Date(next);
   dayBefore.setDate(dayBefore.getDate() - 1);
   dayBefore.setHours(hour, 0, 0, 0);
-  // Morning of
   const morning = new Date(next);
   morning.setHours(hour, 0, 0, 0);
 
@@ -61,8 +56,7 @@ function fire(b: Birthday, isDayBefore: boolean) {
   };
 }
 
-export function nextReminderInfo(): string | null {
-  const list = storage.getBirthdays();
+export function nextReminderInfo(list: Birthday[]): string | null {
   if (!list.length) return null;
   const sorted = [...list].sort((a, b) => daysUntil(a) - daysUntil(b));
   const b = sorted[0];
