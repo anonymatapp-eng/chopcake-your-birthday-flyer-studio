@@ -9,8 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import FlyerCanvas from "@/components/FlyerCanvas";
-import { useBirthdays, usePrefs, useTemplates } from "@/hooks/useStorage";
-import { storage } from "@/lib/storage";
+import { useBirthdays, usePrefs, useTemplates, prefsApi, profileApi, templateApi, useProfile } from "@/hooks/useData";
+import { useAuth } from "@/hooks/useAuth";
 import { captionLibrary, pickThree } from "@/data/messages";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -18,13 +18,14 @@ import { cn } from "@/lib/utils";
 const MSG_LIMIT = 50;
 
 export default function Create() {
+  const { user } = useAuth();
   const [params] = useSearchParams();
-  const [templates] = useTemplates();
-  const [birthdays] = useBirthdays();
-  const [prefs, refreshPrefs] = usePrefs();
+  const { data: templates } = useTemplates();
+  const { data: birthdays } = useBirthdays();
+  const { data: prefs, refresh: refreshPrefs } = usePrefs();
+  const { data: profile, refresh: refreshProfile } = useProfile();
 
-  const activeTemplates = useMemo(() => templates.filter((t) => t.active), [templates]);
-  const [templateId, setTemplateId] = useState<string>(activeTemplates[0]?.id ?? "");
+  const [templateId, setTemplateId] = useState<string>("");
   const [name, setName] = useState("");
   const [photo, setPhoto] = useState<string | undefined>();
   const [message, setMessage] = useState("");
@@ -32,10 +33,8 @@ export default function Create() {
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
 
-  const flyerRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
-  // Pre-fill from birthday param
   useEffect(() => {
     const id = params.get("birthday");
     if (id) {
@@ -45,13 +44,15 @@ export default function Create() {
         if (b.photo) setPhoto(b.photo);
       }
     }
+    const tplId = params.get("template");
+    if (tplId) setTemplateId(tplId);
   }, [params, birthdays]);
 
   useEffect(() => {
-    if (!templateId && activeTemplates[0]) setTemplateId(activeTemplates[0].id);
-  }, [activeTemplates, templateId]);
+    if (!templateId && templates[0]) setTemplateId(templates[0].id);
+  }, [templates, templateId]);
 
-  const template = activeTemplates.find((t) => t.id === templateId) ?? activeTemplates[0];
+  const template = templates.find((t) => t.id === templateId) ?? templates[0];
 
   const onPhoto = (file?: File | null) => {
     if (!file) return;
@@ -61,7 +62,7 @@ export default function Create() {
   };
 
   const exportFlyer = async () => {
-    if (!exportRef.current || !template) return;
+    if (!exportRef.current || !template || !user || !profile) return;
     setExporting(true);
     try {
       const dataUrl = await toPng(exportRef.current, { pixelRatio: 1, cacheBust: true, width: 1080, height: 1920 });
@@ -69,14 +70,17 @@ export default function Create() {
       a.href = dataUrl;
       a.download = `chopcake-${(name || "flyer").toLowerCase().replace(/\s+/g, "-")}.png`;
       a.click();
-      // Bump usage + profile flyer count
-      storage.incrementUsage(template.id);
-      const p = storage.getProfile();
-      storage.setProfile({ ...p, flyersMade: p.flyersMade + 1, streak: Math.max(p.streak, 1) });
+
+      await templateApi.incrementUsage(template.id, template.usageCount);
+      await profileApi.update(user.id, {
+        flyersMade: profile.flyersMade + 1,
+        streak: Math.max(profile.streak, 1),
+      });
+      refreshProfile();
       setExported(true);
       toast({ title: "Flyer downloaded! 🎉", description: "Share it with the birthday star." });
-    } catch (e) {
-      toast({ title: "Couldn't export", description: "Try again in a moment.", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Couldn't export", description: e.message ?? "Try again in a moment.", variant: "destructive" });
     } finally {
       setExporting(false);
     }
@@ -89,16 +93,19 @@ export default function Create() {
 
   const share = async () => {
     if (navigator.share) {
-      try {
-        await navigator.share({ title: "Birthday flyer", text: captionLibrary[0] });
-      } catch {}
+      try { await navigator.share({ title: "Birthday flyer", text: captionLibrary[0] }); } catch {}
     } else {
       copy(captionLibrary[0]);
     }
   };
 
   if (!template) {
-    return <div className="container py-20 text-center text-muted-foreground">No templates available. Visit /admin to add some.</div>;
+    return (
+      <div className="container py-20 text-center">
+        <div className="text-5xl mb-3">🎨</div>
+        <p className="text-muted-foreground">No templates available yet. An admin needs to create some first.</p>
+      </div>
+    );
   }
 
   return (
@@ -109,13 +116,11 @@ export default function Create() {
       </div>
 
       <div className="grid lg:grid-cols-[1fr,360px] gap-6 lg:gap-10">
-        {/* Form */}
         <div className="space-y-6 order-2 lg:order-1">
-          {/* Template */}
           <section>
             <SectionHeader step={1} title="Pick a template" />
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-              {activeTemplates.map((t) => (
+              {templates.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTemplateId(t.id)}
@@ -142,16 +147,12 @@ export default function Create() {
             </div>
           </section>
 
-          {/* Photo */}
           <section>
             <SectionHeader step={2} title="Add a photo" />
             <Card
               className="mt-3 p-4 border-dashed bg-card-elevated"
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                onPhoto(e.dataTransfer.files?.[0]);
-              }}
+              onDrop={(e) => { e.preventDefault(); onPhoto(e.dataTransfer.files?.[0]); }}
             >
               {photo ? (
                 <div className="flex items-center gap-3">
@@ -168,16 +169,10 @@ export default function Create() {
                   <div className="text-xs text-muted-foreground mb-3">PNG or JPG, square works best</div>
                   <div className="flex gap-2">
                     <Button asChild variant="outline" size="sm">
-                      <label>
-                        <Upload className="h-4 w-4" /> Upload
-                        <input type="file" accept="image/*" hidden onChange={(e) => onPhoto(e.target.files?.[0])} />
-                      </label>
+                      <label><Upload className="h-4 w-4" /> Upload<input type="file" accept="image/*" hidden onChange={(e) => onPhoto(e.target.files?.[0])} /></label>
                     </Button>
                     <Button asChild variant="outline" size="sm">
-                      <label>
-                        <Camera className="h-4 w-4" /> Camera
-                        <input type="file" accept="image/*" capture="user" hidden onChange={(e) => onPhoto(e.target.files?.[0])} />
-                      </label>
+                      <label><Camera className="h-4 w-4" /> Camera<input type="file" accept="image/*" capture="user" hidden onChange={(e) => onPhoto(e.target.files?.[0])} /></label>
                     </Button>
                   </div>
                 </div>
@@ -185,30 +180,16 @@ export default function Create() {
             </Card>
           </section>
 
-          {/* Name */}
           <section>
             <SectionHeader step={3} title="Their name" />
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Maya"
-              className="mt-3 h-12 text-base bg-card-elevated"
-              maxLength={40}
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Maya" className="mt-3 h-12 text-base bg-card-elevated" maxLength={40} />
           </section>
 
-          {/* Message */}
           <section>
             <SectionHeader step={4} title="Birthday message" />
             <div className="mt-3 space-y-3">
               <div className="relative">
-                <Textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value.slice(0, MSG_LIMIT))}
-                  placeholder="Write something warm…"
-                  rows={2}
-                  className="bg-card-elevated resize-none pr-14"
-                />
+                <Textarea value={message} onChange={(e) => setMessage(e.target.value.slice(0, MSG_LIMIT))} placeholder="Write something warm…" rows={2} className="bg-card-elevated resize-none pr-14" />
                 <span className={cn("absolute bottom-2 right-3 text-[10px] font-medium", message.length >= MSG_LIMIT ? "text-destructive" : "text-muted-foreground")}>
                   {message.length}/{MSG_LIMIT}
                 </span>
@@ -221,11 +202,7 @@ export default function Create() {
               </div>
               <div className="grid gap-2">
                 {suggested.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setMessage(s.slice(0, MSG_LIMIT))}
-                    className="text-left text-sm p-3 rounded-xl border border-border/60 bg-card-elevated hover:border-primary/40 transition-smooth"
-                  >
+                  <button key={s} onClick={() => setMessage(s.slice(0, MSG_LIMIT))} className="text-left text-sm p-3 rounded-xl border border-border/60 bg-card-elevated hover:border-primary/40 transition-smooth">
                     <Sparkles className="inline h-3 w-3 mr-1 text-primary" /> {s}
                   </button>
                 ))}
@@ -233,22 +210,23 @@ export default function Create() {
             </div>
           </section>
 
-          {/* Watermark */}
-          <section className="flex items-center justify-between p-4 rounded-2xl bg-card-elevated border border-border/60">
-            <div>
-              <div className="text-sm font-semibold">"Made with ChopCake" watermark</div>
-              <div className="text-xs text-muted-foreground">Toggle off for a clean export</div>
-            </div>
-            <Switch
-              checked={prefs.watermark}
-              onCheckedChange={(v) => {
-                storage.setPrefs({ ...prefs, watermark: v });
-                refreshPrefs();
-              }}
-            />
-          </section>
+          {prefs && (
+            <section className="flex items-center justify-between p-4 rounded-2xl bg-card-elevated border border-border/60">
+              <div>
+                <div className="text-sm font-semibold">"Made with ChopCake" watermark</div>
+                <div className="text-xs text-muted-foreground">Toggle off for a clean export</div>
+              </div>
+              <Switch
+                checked={prefs.watermark}
+                onCheckedChange={async (v) => {
+                  if (!user) return;
+                  await prefsApi.update(user.id, { watermark: v });
+                  refreshPrefs();
+                }}
+              />
+            </section>
+          )}
 
-          {/* Export */}
           <section>
             <SectionHeader step={5} title="Export & share" />
             <div className="mt-3 flex flex-wrap gap-2">
@@ -266,9 +244,7 @@ export default function Create() {
                   {captionLibrary.map((c) => (
                     <div key={c} className="flex items-start gap-2 text-sm p-2 rounded-lg bg-muted/40">
                       <span className="flex-1">{c}</span>
-                      <Button size="icon" variant="ghost" onClick={() => copy(c)}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => copy(c)}><Copy className="h-3.5 w-3.5" /></Button>
                     </div>
                   ))}
                 </div>
@@ -277,37 +253,21 @@ export default function Create() {
           </section>
         </div>
 
-        {/* Live preview */}
         <div className="order-1 lg:order-2">
           <div className="lg:sticky lg:top-24">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 text-center">
               Live preview
             </div>
-            <div ref={flyerRef} className="flex justify-center">
-              <FlyerCanvas
-                template={template}
-                name={name}
-                message={message}
-                photo={photo}
-                watermark={prefs.watermark}
-                width={300}
-              />
+            <div className="flex justify-center">
+              <FlyerCanvas template={template} name={name} message={message} photo={photo} watermark={prefs?.watermark ?? true} width={300} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Off-screen high-res export node */}
       <div style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }} aria-hidden>
         <div ref={exportRef}>
-          <FlyerCanvas
-            template={template}
-            name={name}
-            message={message}
-            photo={photo}
-            watermark={prefs.watermark}
-            width={1080}
-          />
+          <FlyerCanvas template={template} name={name} message={message} photo={photo} watermark={prefs?.watermark ?? true} width={1080} />
         </div>
       </div>
     </div>
@@ -317,9 +277,7 @@ export default function Create() {
 function SectionHeader({ step, title }: { step: number; title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="h-7 w-7 rounded-full gradient-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
-        {step}
-      </div>
+      <div className="h-7 w-7 rounded-full gradient-primary text-primary-foreground text-xs font-bold flex items-center justify-center">{step}</div>
       <h2 className="font-display text-lg font-bold">{title}</h2>
     </div>
   );
