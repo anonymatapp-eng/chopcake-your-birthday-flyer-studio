@@ -2,11 +2,18 @@ import { forwardRef, useEffect, useRef, useState } from "react";
 import type { Template } from "@/types";
 import AutoFitText from "@/components/AutoFitText";
 
+export interface PhotoAdjust {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 interface Props {
   template: Template;
   name: string;
   message: string;
   photo?: string;
+  photoAdjust?: PhotoAdjust;
   watermark?: boolean;
   // Render width in px — height auto-derived from 1:1 ratio
   width?: number;
@@ -17,7 +24,17 @@ interface Props {
 const RATIO = 1;
 
 const FlyerCanvas = forwardRef<HTMLDivElement, Props>(function FlyerCanvas(
-  { template, name, message, photo, watermark = true, width = 360, className, showZones = false },
+  {
+    template,
+    name,
+    message,
+    photo,
+    photoAdjust = { scale: 1, offsetX: 0, offsetY: 0 },
+    watermark = true,
+    width = 360,
+    className,
+    showZones = false,
+  },
   ref,
 ) {
   const height = width / RATIO;
@@ -72,7 +89,17 @@ const FlyerCanvas = forwardRef<HTMLDivElement, Props>(function FlyerCanvas(
         }}
       >
         {photo ? (
-          <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img
+            src={photo}
+            alt=""
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              transformOrigin: "center center",
+              transform: `translate(${photoAdjust.offsetX * 100}%, ${photoAdjust.offsetY * 100}%) scale(${photoAdjust.scale})`,
+            }}
+          />
         ) : (
           <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Photo</span>
         )}

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import FlyerCanvas from "@/components/FlyerCanvas";
+import { Slider } from "@/components/ui/slider";
 import { useBirthdays, usePrefs, useTemplates, prefsApi, profileApi, templateApi, useProfile } from "@/hooks/useData";
 import { useAuth } from "@/hooks/useAuth";
 import { captionLibrary, pickThree } from "@/data/messages";
@@ -28,6 +29,9 @@ export default function Create() {
   const [templateId, setTemplateId] = useState<string>("");
   const [name, setName] = useState("");
   const [photo, setPhoto] = useState<string | undefined>();
+  const [photoScale, setPhotoScale] = useState(1);
+  const [photoOffsetX, setPhotoOffsetX] = useState(0);
+  const [photoOffsetY, setPhotoOffsetY] = useState(0);
   const [message, setMessage] = useState("");
   const [suggested, setSuggested] = useState<string[]>(pickThree());
   const [exporting, setExporting] = useState(false);
@@ -57,7 +61,12 @@ export default function Create() {
   const onPhoto = (file?: File | null) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result as string);
+    reader.onload = () => {
+      setPhoto(reader.result as string);
+      setPhotoScale(1);
+      setPhotoOffsetX(0);
+      setPhotoOffsetY(0);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -158,7 +167,18 @@ export default function Create() {
                 <div className="flex items-center gap-3">
                   <img src={photo} alt="" className="h-16 w-16 rounded-xl object-cover" />
                   <div className="flex-1 text-sm">Looking great!</div>
-                  <Button variant="ghost" size="sm" onClick={() => setPhoto(undefined)}>Remove</Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setPhoto(undefined);
+                      setPhotoScale(1);
+                      setPhotoOffsetX(0);
+                      setPhotoOffsetY(0);
+                    }}
+                  >
+                    Remove
+                  </Button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center text-center py-4">
@@ -173,6 +193,61 @@ export default function Create() {
                     </Button>
                     <Button asChild variant="outline" size="sm">
                       <label><Camera className="h-4 w-4" /> Camera<input type="file" accept="image/*" capture="user" hidden onChange={(e) => onPhoto(e.target.files?.[0])} /></label>
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {photo && (
+                <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+                  <div className="flex items-center justify-between text-xs">
+                    <Label className="text-xs">Zoom</Label>
+                    <span className="text-muted-foreground">{photoScale.toFixed(2)}x</span>
+                  </div>
+                  <Slider
+                    value={[photoScale]}
+                    min={1}
+                    max={3}
+                    step={0.01}
+                    onValueChange={(v) => setPhotoScale(v[0] ?? 1)}
+                  />
+
+                  <div className="flex items-center justify-between text-xs">
+                    <Label className="text-xs">Move left / right</Label>
+                    <span className="text-muted-foreground">{Math.round(photoOffsetX * 100)}%</span>
+                  </div>
+                  <Slider
+                    value={[photoOffsetX]}
+                    min={-0.5}
+                    max={0.5}
+                    step={0.01}
+                    onValueChange={(v) => setPhotoOffsetX(v[0] ?? 0)}
+                  />
+
+                  <div className="flex items-center justify-between text-xs">
+                    <Label className="text-xs">Move up / down</Label>
+                    <span className="text-muted-foreground">{Math.round(photoOffsetY * 100)}%</span>
+                  </div>
+                  <Slider
+                    value={[photoOffsetY]}
+                    min={-0.5}
+                    max={0.5}
+                    step={0.01}
+                    onValueChange={(v) => setPhotoOffsetY(v[0] ?? 0)}
+                  />
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPhotoScale(1);
+                        setPhotoOffsetX(0);
+                        setPhotoOffsetY(0);
+                      }}
+                    >
+                      Reset photo position
                     </Button>
                   </div>
                 </div>
@@ -259,7 +334,15 @@ export default function Create() {
               Live preview
             </div>
             <div className="flex justify-center">
-              <FlyerCanvas template={template} name={name} message={message} photo={photo} watermark={prefs?.watermark ?? true} width={300} />
+              <FlyerCanvas
+                template={template}
+                name={name}
+                message={message}
+                photo={photo}
+                photoAdjust={{ scale: photoScale, offsetX: photoOffsetX, offsetY: photoOffsetY }}
+                watermark={prefs?.watermark ?? true}
+                width={300}
+              />
             </div>
           </div>
         </div>
@@ -267,7 +350,15 @@ export default function Create() {
 
       <div style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }} aria-hidden>
         <div ref={exportRef}>
-          <FlyerCanvas template={template} name={name} message={message} photo={photo} watermark={prefs?.watermark ?? true} width={1080} />
+          <FlyerCanvas
+            template={template}
+            name={name}
+            message={message}
+            photo={photo}
+            photoAdjust={{ scale: photoScale, offsetX: photoOffsetX, offsetY: photoOffsetY }}
+            watermark={prefs?.watermark ?? true}
+            width={1080}
+          />
         </div>
       </div>
     </div>
