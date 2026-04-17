@@ -75,7 +75,7 @@ export default function Auth() {
             </div>
             <div>
               <Label>Password</Label>
-              <Input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={tab === "signin" ? "current-password" : "new-password"} />
+              <Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={tab === "signin" ? "current-password" : "new-password"} />
             </div>
 
             <Button type="submit" disabled={busy} className="w-full gradient-primary text-primary-foreground rounded-full font-semibold">
