@@ -30,7 +30,7 @@ export default function Home() {
             Create a beautiful flyer in seconds. Never miss the dates that matter.
           </p>
           <div className="flex flex-wrap gap-3 pt-2">
-            <Button asChild size="lg" className="bg-white text-foreground hover:bg-white/90 shadow-elev-md rounded-full font-semibold">
+            <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-white/90 shadow-elev-md rounded-full font-semibold">
               <Link to="/create">
                 <Sparkles className="h-4 w-4" /> Create a Birthday Flyer
               </Link>
@@ -149,10 +149,9 @@ function EmptyBirthdays() {
     <Card className="p-8 text-center bg-card-elevated border-dashed border-border/60">
       <div className="text-4xl mb-2">🎈</div>
       <div className="font-display text-lg font-bold">No birthdays yet</div>
-      <p className="text-sm text-muted-foreground mb-4">Add a few or load demo data to explore.</p>
-      <div className="flex justify-center gap-2">
+      <p className="text-sm text-muted-foreground mb-4">Add your first birthday to start celebrating.</p>
+      <div className="flex justify-center">
         <Button asChild><Link to="/birthdays"><Plus className="h-4 w-4" /> Add birthday</Link></Button>
-        <Button variant="outline" onClick={() => storage.loadDemoBirthdays()}>Load demo data</Button>
       </div>
     </Card>
   );
