@@ -167,11 +167,15 @@ export default function Birthdays() {
 
 function BirthdayDialog({ editing, onClose }: { editing: Birthday | null; onClose: () => void }) {
   const { user } = useAuth();
+  const { data: prefs, refresh: refreshPrefs } = usePrefs();
   const [name, setName] = useState(editing?.name ?? "");
   const [date, setDate] = useState(editing?.date ?? "1995-01-01");
   const [photo, setPhoto] = useState<string | undefined>(editing?.photo);
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [busy, setBusy] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported"
+  );
 
   const onPhoto = (file?: File | null) => {
     if (!file) return;
@@ -180,12 +184,40 @@ function BirthdayDialog({ editing, onClose }: { editing: Birthday | null; onClos
     r.readAsDataURL(file);
   };
 
+  const askPermission = async () => {
+    if (permission === "unsupported") {
+      toast({ title: "Notifications not supported", description: "Your browser doesn't support notifications.", variant: "destructive" });
+      return false;
+    }
+    if (permission === "granted") return true;
+    const ok = await requestNotificationPermission();
+    const current = Notification.permission;
+    setPermission(current);
+    if (!ok) {
+      toast({
+        title: "Notifications required",
+        description: current === "denied"
+          ? "You blocked notifications. Enable them in your browser site settings, then try again."
+          : "Please click 'Allow' in your browser to enable birthday reminders.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (user) {
+      await prefsApi.update(user.id, { notificationsEnabled: true });
+      refreshPrefs();
+    }
+    return true;
+  };
+
   const save = async () => {
     if (!name.trim()) {
       toast({ title: "Name required", variant: "destructive" });
       return;
     }
     if (!user) return;
+    const allowed = await askPermission();
+    if (!allowed) return;
     setBusy(true);
     try {
       const b: Birthday = {
