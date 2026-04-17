@@ -1,22 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Camera, Check, Copy, Download, RefreshCw, Share2, Sparkles, Upload } from "lucide-react";
-import { toBlob } from "html-to-image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import FlyerCanvas from "@/components/FlyerCanvas";
+import FlyerCanvas, { type PhotoAdjust } from "@/components/FlyerCanvas";
 import { Slider } from "@/components/ui/slider";
 import { useBirthdays, usePrefs, useTemplates, prefsApi, profileApi, templateApi, useProfile } from "@/hooks/useData";
 import { useAuth } from "@/hooks/useAuth";
 import { captionLibrary, pickThree } from "@/data/messages";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import type { Template, Zone } from "@/types";
 
 const MSG_LIMIT = 50;
+const EXPORT_SIZE = 1080;
+const EXPORT_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', Inter, sans-serif";
 
 export default function Create() {
   const { user } = useAuth();
@@ -36,8 +38,6 @@ export default function Create() {
   const [suggested, setSuggested] = useState<string[]>(pickThree());
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
-
-  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const id = params.get("birthday");
@@ -71,11 +71,17 @@ export default function Create() {
   };
 
   const exportFlyer = async () => {
-    if (!exportRef.current || !template || !user || !profile) return;
+    if (!template || !user || !profile) return;
     setExporting(true);
     try {
-      const blob = await toBlob(exportRef.current, { pixelRatio: 1, cacheBust: true, width: 1080, height: 1080 });
-      if (!blob) throw new Error("Could not render flyer image");
+      const blob = await renderFlyerBlob({
+        template,
+        name,
+        message,
+        photo,
+        photoAdjust: { scale: photoScale, offsetX: photoOffsetX, offsetY: photoOffsetY },
+        watermark: prefs?.watermark ?? true,
+      });
 
       const fileName = `chopcake-${(name || "flyer").toLowerCase().replace(/\s+/g, "-")}.png`;
       const objectUrl = URL.createObjectURL(blob);
@@ -84,7 +90,16 @@ export default function Create() {
         /iPad|iPhone|iPod/.test(navigator.userAgent) ||
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-      if (isIOS) {
+      const canShareFiles =
+        typeof navigator !== "undefined" &&
+        "share" in navigator &&
+        "canShare" in navigator &&
+        (navigator as any).canShare?.({ files: [new File([blob], fileName, { type: "image/png" })] });
+
+      if (isIOS && canShareFiles) {
+        const file = new File([blob], fileName, { type: "image/png" });
+        await (navigator as any).share({ files: [file], title: "Birthday flyer" });
+      } else if (isIOS) {
         const opened = window.open(objectUrl, "_blank", "noopener,noreferrer");
         if (!opened) window.location.href = objectUrl;
       } else {
@@ -106,7 +121,9 @@ export default function Create() {
       });
       refreshProfile();
       setExported(true);
-      if (isIOS) {
+      if (isIOS && canShareFiles) {
+        toast({ title: "Flyer ready", description: "Opened your share sheet so you can save it to Photos." });
+      } else if (isIOS) {
         toast({ title: "Flyer ready", description: "The image opened in a new tab. Press and hold to save to Photos." });
       } else {
         toast({ title: "Flyer downloaded! 🎉", description: "Share it with the birthday star." });
@@ -371,19 +388,6 @@ export default function Create() {
         </div>
       </div>
 
-      <div style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }} aria-hidden>
-        <div ref={exportRef}>
-          <FlyerCanvas
-            template={template}
-            name={name}
-            message={message}
-            photo={photo}
-            photoAdjust={{ scale: photoScale, offsetX: photoOffsetX, offsetY: photoOffsetY }}
-            watermark={prefs?.watermark ?? true}
-            width={1080}
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -395,4 +399,228 @@ function SectionHeader({ step, title }: { step: number; title: string }) {
       <h2 className="font-display text-lg font-bold">{title}</h2>
     </div>
   );
+}
+
+function isDataUrl(src: string) {
+  return src.startsWith("data:");
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    if (!isDataUrl(src)) img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not load image"));
+    img.src = src;
+  });
+}
+
+function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function drawCoverImage(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
+  const scale = Math.max(w / img.width, h / img.height);
+  const drawW = img.width * scale;
+  const drawH = img.height * scale;
+  const drawX = x + (w - drawW) / 2;
+  const drawY = y + (h - drawH) / 2;
+  ctx.drawImage(img, drawX, drawY, drawW, drawH);
+}
+
+function wrapWords(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] | null {
+  const paragraphs = text.split("\n");
+  const lines: string[] = [];
+
+  for (const paragraph of paragraphs) {
+    const trimmed = paragraph.trim();
+    if (!trimmed) {
+      lines.push("");
+      continue;
+    }
+
+    const words = trimmed.split(/\s+/);
+    let current = "";
+
+    for (const word of words) {
+      if (ctx.measureText(word).width > maxWidth) {
+        return null;
+      }
+
+      const candidate = current ? `${current} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxWidth) {
+        current = candidate;
+      } else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    }
+
+    if (current) lines.push(current);
+  }
+
+  return lines;
+}
+
+function drawFittedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  rect: { x: number; y: number; w: number; h: number },
+  options: { color: string; weight: number; maxSize: number; minSize?: number; align?: "center" | "left" },
+) {
+  const { color, weight, maxSize, minSize = 8, align = "center" } = options;
+  const lineHeightFactor = 1.1;
+
+  let lo = minSize;
+  let hi = maxSize;
+  let bestSize = minSize;
+  let bestLines: string[] = [text];
+
+  for (let i = 0; i < 18; i++) {
+    const mid = (lo + hi) / 2;
+    ctx.font = `${weight} ${mid}px ${EXPORT_FONT_FAMILY}`;
+    const lines = wrapWords(ctx, text, rect.w);
+    const fitsHeight = !!lines && lines.length * mid * lineHeightFactor <= rect.h + 1;
+
+    if (lines && fitsHeight) {
+      bestSize = mid;
+      bestLines = lines;
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+
+    if (hi - lo < 0.5) break;
+  }
+
+  const lineHeight = bestSize * lineHeightFactor;
+  const blockHeight = bestLines.length * lineHeight;
+  const startY = rect.y + (rect.h - blockHeight) / 2;
+
+  ctx.save();
+  ctx.font = `${weight} ${bestSize}px ${EXPORT_FONT_FAMILY}`;
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = "top";
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 2;
+
+  const x = align === "center" ? rect.x + rect.w / 2 : rect.x;
+  bestLines.forEach((line, idx) => {
+    ctx.fillText(line, x, startY + idx * lineHeight);
+  });
+
+  ctx.restore();
+}
+
+async function renderFlyerBlob({
+  template,
+  name,
+  message,
+  photo,
+  photoAdjust,
+  watermark,
+}: {
+  template: Template;
+  name: string;
+  message: string;
+  photo?: string;
+  photoAdjust: PhotoAdjust;
+  watermark: boolean;
+}) {
+  const canvas = document.createElement("canvas");
+  canvas.width = EXPORT_SIZE;
+  canvas.height = EXPORT_SIZE;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas is not available");
+
+  const background = await loadImage(template.background);
+  drawCoverImage(ctx, background, 0, 0, EXPORT_SIZE, EXPORT_SIZE);
+
+  const px = (z: Zone) => ({
+    x: z.x * EXPORT_SIZE,
+    y: z.y * EXPORT_SIZE,
+    w: z.w * EXPORT_SIZE,
+    h: z.h * EXPORT_SIZE,
+  });
+
+  const photoZone = px(template.photoZone);
+  ctx.save();
+  roundedRectPath(ctx, photoZone.x, photoZone.y, photoZone.w, photoZone.h, 16);
+  ctx.clip();
+
+  if (photo) {
+    const photoImg = await loadImage(photo);
+    const zoneCenterX = photoZone.x + photoZone.w / 2;
+    const zoneCenterY = photoZone.y + photoZone.h / 2;
+    const moveX = photoAdjust.offsetX * photoZone.w;
+    const moveY = photoAdjust.offsetY * photoZone.h;
+
+    ctx.translate(moveX, moveY);
+    ctx.translate(zoneCenterX, zoneCenterY);
+    ctx.scale(photoAdjust.scale, photoAdjust.scale);
+    ctx.translate(-zoneCenterX, -zoneCenterY);
+    drawCoverImage(ctx, photoImg, photoZone.x, photoZone.y, photoZone.w, photoZone.h);
+  } else {
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(photoZone.x, photoZone.y, photoZone.w, photoZone.h);
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 6]);
+    ctx.strokeRect(photoZone.x + 1, photoZone.y + 1, photoZone.w - 2, photoZone.h - 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.font = `600 28px ${EXPORT_FONT_FAMILY}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Photo", photoZone.x + photoZone.w / 2, photoZone.y + photoZone.h / 2);
+  }
+  ctx.restore();
+
+  const nameZone = px(template.nameZone);
+  drawFittedText(ctx, name || "Their Name", nameZone, {
+    color: template.nameColor,
+    weight: 800,
+    maxSize: Math.floor(nameZone.h),
+    align: "center",
+  });
+
+  const messageZone = px(template.messageZone);
+  drawFittedText(ctx, message || "Your warm message here", messageZone, {
+    color: template.messageColor,
+    weight: 500,
+    maxSize: Math.floor(messageZone.h * 0.55),
+    align: "center",
+  });
+
+  if (watermark) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.font = `500 ${Math.max(8, EXPORT_SIZE * 0.025)}px ${EXPORT_FONT_FAMILY}`;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "bottom";
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 6;
+    ctx.fillText("Made with ChopCake", EXPORT_SIZE - 12, EXPORT_SIZE - 8);
+    ctx.restore();
+  }
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((b) => resolve(b), "image/png");
+  });
+  if (!blob) throw new Error("Could not encode flyer image");
+  return blob;
 }
