@@ -7,7 +7,7 @@ const KEYS = {
   profile: "chopcake:profile",
   prefs: "chopcake:prefs",
   adminSession: "chopcake:adminSession",
-  seeded: "chopcake:seeded",
+  seeded: "chopcake:seeded:v2",
 } as const;
 
 function read<T>(key: string, fallback: T): T {
@@ -25,10 +25,12 @@ function write<T>(key: string, value: T) {
   window.dispatchEvent(new CustomEvent("chopcake:change", { detail: { key } }));
 }
 
-// One-time seed
+// One-time seed (clears legacy demo data on upgrade)
 export function ensureSeed() {
   if (localStorage.getItem(KEYS.seeded)) return;
-  write(KEYS.templates, seedTemplates);
+  // Clear any legacy demo data from previous versions
+  localStorage.removeItem("chopcake:seeded");
+  write(KEYS.templates, [] as Template[]);
   write(KEYS.birthdays, [] as Birthday[]);
   write(KEYS.profile, defaultProfile());
   write(KEYS.prefs, defaultPrefs());
@@ -94,10 +96,6 @@ export const storage = {
     localStorage.removeItem(KEYS.adminSession);
   },
 
-  // demo
-  loadDemoBirthdays: () => {
-    import("@/data/seedBirthdays").then((m) => storage.setBirthdays(m.seedBirthdays));
-  },
 };
 
 export const ADMIN_PASSWORD = "chopcake2025";
