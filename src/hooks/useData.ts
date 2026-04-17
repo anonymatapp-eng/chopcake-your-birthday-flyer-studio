@@ -62,6 +62,24 @@ export function useTemplates(includeInactive = false) {
   }, [includeInactive]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`templates-live-${includeInactive ? "all" : "active"}-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "templates" },
+        () => {
+          refresh();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [includeInactive, refresh]);
+
   return { data, loading, refresh };
 }
 
