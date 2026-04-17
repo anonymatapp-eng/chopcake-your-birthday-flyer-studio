@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Camera, Check, Copy, Download, RefreshCw, Share2, Sparkles, Upload } from "lucide-react";
-import { toPng } from "html-to-image";
+import { toBlob } from "html-to-image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -74,11 +74,30 @@ export default function Create() {
     if (!exportRef.current || !template || !user || !profile) return;
     setExporting(true);
     try {
-      const dataUrl = await toPng(exportRef.current, { pixelRatio: 1, cacheBust: true, width: 1080, height: 1080 });
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = `chopcake-${(name || "flyer").toLowerCase().replace(/\s+/g, "-")}.png`;
-      a.click();
+      const blob = await toBlob(exportRef.current, { pixelRatio: 1, cacheBust: true, width: 1080, height: 1080 });
+      if (!blob) throw new Error("Could not render flyer image");
+
+      const fileName = `chopcake-${(name || "flyer").toLowerCase().replace(/\s+/g, "-")}.png`;
+      const objectUrl = URL.createObjectURL(blob);
+
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+      if (isIOS) {
+        const opened = window.open(objectUrl, "_blank", "noopener,noreferrer");
+        if (!opened) window.location.href = objectUrl;
+      } else {
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      // Keep URL alive briefly for iOS Safari tabs, then release memory.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 15000);
 
       await templateApi.incrementUsage(template.id, template.usageCount);
       await profileApi.update(user.id, {
@@ -87,7 +106,11 @@ export default function Create() {
       });
       refreshProfile();
       setExported(true);
-      toast({ title: "Flyer downloaded! 🎉", description: "Share it with the birthday star." });
+      if (isIOS) {
+        toast({ title: "Flyer ready", description: "The image opened in a new tab. Press and hold to save to Photos." });
+      } else {
+        toast({ title: "Flyer downloaded! 🎉", description: "Share it with the birthday star." });
+      }
     } catch (e: any) {
       toast({ title: "Couldn't export", description: e.message ?? "Try again in a moment.", variant: "destructive" });
     } finally {

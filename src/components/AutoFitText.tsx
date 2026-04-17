@@ -13,8 +13,8 @@ interface Props {
   className?: string;
 }
 
-// Auto-fits a single line of text into a box by binary-searching font-size.
-// Wraps to multiple lines when needed (used for messages).
+// Auto-fits text into a box by binary-searching font-size.
+// Uses word wrapping only (no letter wrapping or hyphenation).
 export default function AutoFitText({
   text,
   width,
@@ -69,7 +69,10 @@ export default function AutoFitText({
           textAlign: align,
           width: "100%",
           letterSpacing: "-0.02em",
-          wordBreak: "break-word",
+          whiteSpace: "pre-wrap",
+          wordBreak: "normal",
+          overflowWrap: "normal",
+          hyphens: "none",
           textShadow: "0 2px 12px rgba(0,0,0,0.35)",
         }}
       >
