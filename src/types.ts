@@ -13,7 +13,7 @@ export interface Template {
   name: string;
   emoji: string;
   category: string;
-  // data: URL of background image (1080x1920 recommended)
+  // data: URL of background image (1080x1080 required)
   background: string;
   photoZone: Zone;
   nameZone: Zone;

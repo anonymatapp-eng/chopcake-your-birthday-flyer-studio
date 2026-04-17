@@ -21,6 +21,9 @@ const defaultZones = {
   messageZone: { x: 0.1, y: 0.78, w: 0.8, h: 0.12 } as Zone,
 };
 
+const REQUIRED_BG_WIDTH = 1080;
+const REQUIRED_BG_HEIGHT = 1080;
+
 const EMOJI_OPTIONS = ["🎂", "🎉", "🎊", "✨", "🌟", "🎈", "🌸", "🎁", "💖", "🥳"];
 
 export default function TemplateEditor({ editing, onClose }: Props) {
@@ -38,9 +41,33 @@ export default function TemplateEditor({ editing, onClose }: Props) {
 
   const onUpload = (file?: File | null) => {
     if (!file) return;
-    const r = new FileReader();
-    r.onload = () => setBackground(r.result as string);
-    r.readAsDataURL(file);
+
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const valid = img.naturalWidth === REQUIRED_BG_WIDTH && img.naturalHeight === REQUIRED_BG_HEIGHT;
+      URL.revokeObjectURL(objectUrl);
+
+      if (!valid) {
+        toast({
+          title: `Background must be ${REQUIRED_BG_WIDTH}x${REQUIRED_BG_HEIGHT}px`,
+          description: `Uploaded image is ${img.naturalWidth}x${img.naturalHeight}px.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const r = new FileReader();
+      r.onload = () => setBackground(r.result as string);
+      r.readAsDataURL(file);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      toast({ title: "Could not read image", variant: "destructive" });
+    };
+
+    img.src = objectUrl;
   };
 
   const save = async () => {
@@ -97,7 +124,7 @@ export default function TemplateEditor({ editing, onClose }: Props) {
       {/* Left: form */}
       <div className="space-y-4">
         <div>
-          <Label>Background image (1080×1920 recommended)</Label>
+          <Label>Background image (must be 1080x1080 px)</Label>
           <div className="mt-1 flex items-center gap-3">
             <Button asChild variant="outline" size="sm">
               <label>
