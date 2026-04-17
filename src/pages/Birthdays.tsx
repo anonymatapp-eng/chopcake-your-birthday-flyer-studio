@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bell, Calendar as CalIcon, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useBirthdays, usePrefs } from "@/hooks/useStorage";
-import { storage } from "@/lib/storage";
+import { useBirthdays, usePrefs, birthdayApi, prefsApi } from "@/hooks/useData";
+import { useAuth } from "@/hooks/useAuth";
 import { ageTurning, daysUntil, formatDateLabel, sortByUpcoming } from "@/lib/birthdays";
 import { colorForName, getInitials } from "@/lib/avatar";
 import type { Birthday } from "@/types";
@@ -16,12 +16,17 @@ import { requestNotificationPermission, scheduleReminders } from "@/lib/reminder
 import { toast } from "@/hooks/use-toast";
 
 export default function Birthdays() {
-  const [list] = useBirthdays();
-  const [prefs, refreshPrefs] = usePrefs();
+  const { user } = useAuth();
+  const { data: list, refresh } = useBirthdays();
+  const { data: prefs, refresh: refreshPrefs } = usePrefs();
   const sorted = sortByUpcoming(list);
   const [editing, setEditing] = useState<Birthday | null>(null);
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(new Date());
+
+  useEffect(() => {
+    scheduleReminders(list, prefs);
+  }, [list, prefs]);
 
   const monthDates = useMemo(() => {
     const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -50,10 +55,16 @@ export default function Birthdays() {
       toast({ title: "Notifications blocked", description: "Enable them in your browser settings.", variant: "destructive" });
       return;
     }
-    storage.setPrefs({ ...prefs, notificationsEnabled: true });
+    if (!user || !prefs) return;
+    await prefsApi.update(user.id, { notificationsEnabled: true });
     refreshPrefs();
-    scheduleReminders();
     toast({ title: "Reminders on 🎉", description: "We'll nudge you the day before and the morning of." });
+  };
+
+  const removeBirthday = async (id: string) => {
+    await birthdayApi.remove(id);
+    refresh();
+    toast({ title: "Removed" });
   };
 
   return (
@@ -64,7 +75,7 @@ export default function Birthdays() {
           <p className="text-sm text-muted-foreground">All the dates that matter, in one place.</p>
         </div>
         <div className="flex gap-2">
-          {!prefs.notificationsEnabled && (
+          {prefs && !prefs.notificationsEnabled && (
             <Button variant="outline" onClick={enableReminders}>
               <Bell className="h-4 w-4" /> Enable reminders
             </Button>
@@ -75,12 +86,11 @@ export default function Birthdays() {
                 <Plus className="h-4 w-4" /> Add birthday
               </Button>
             </DialogTrigger>
-            <BirthdayDialog editing={editing} onClose={() => setOpen(false)} />
+            <BirthdayDialog editing={editing} onClose={() => { setOpen(false); refresh(); }} />
           </Dialog>
         </div>
       </div>
 
-      {/* Calendar */}
       <Card className="p-4 md:p-6 bg-card-elevated border-border/60">
         <div className="flex items-center justify-between mb-4">
           <Button variant="ghost" size="sm" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</Button>
@@ -113,7 +123,6 @@ export default function Birthdays() {
         </div>
       </Card>
 
-      {/* List */}
       <section>
         <h2 className="font-display text-xl font-bold mb-3">Coming up</h2>
         {sorted.length === 0 ? (
@@ -121,9 +130,7 @@ export default function Birthdays() {
             <div className="text-4xl mb-2">📅</div>
             <div className="font-display text-lg font-bold">Nothing here yet</div>
             <p className="text-sm text-muted-foreground mb-4">Add your first birthday to get started.</p>
-            <div className="flex gap-2 justify-center">
-              <Button onClick={() => { setEditing(null); setOpen(true); }}><Plus className="h-4 w-4" /> Add birthday</Button>
-            </div>
+            <Button onClick={() => { setEditing(null); setOpen(true); }}><Plus className="h-4 w-4" /> Add birthday</Button>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -147,7 +154,7 @@ export default function Birthdays() {
                 <div className="flex gap-1">
                   <Button asChild size="icon" variant="ghost"><Link to={`/create?birthday=${b.id}`}><Sparkles className="h-4 w-4" /></Link></Button>
                   <Button size="icon" variant="ghost" onClick={() => { setEditing(b); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => { storage.deleteBirthday(b.id); toast({ title: "Removed" }); }}><Trash2 className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => removeBirthday(b.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </Card>
             ))}
@@ -159,10 +166,12 @@ export default function Birthdays() {
 }
 
 function BirthdayDialog({ editing, onClose }: { editing: Birthday | null; onClose: () => void }) {
+  const { user } = useAuth();
   const [name, setName] = useState(editing?.name ?? "");
   const [date, setDate] = useState(editing?.date ?? "1995-01-01");
   const [photo, setPhoto] = useState<string | undefined>(editing?.photo);
   const [notes, setNotes] = useState(editing?.notes ?? "");
+  const [busy, setBusy] = useState(false);
 
   const onPhoto = (file?: File | null) => {
     if (!file) return;
@@ -171,23 +180,30 @@ function BirthdayDialog({ editing, onClose }: { editing: Birthday | null; onClos
     r.readAsDataURL(file);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!name.trim()) {
       toast({ title: "Name required", variant: "destructive" });
       return;
     }
-    const b: Birthday = {
-      id: editing?.id ?? crypto.randomUUID(),
-      name: name.trim(),
-      date,
-      photo,
-      notes: notes.trim() || undefined,
-      createdAt: editing?.createdAt ?? Date.now(),
-    };
-    storage.upsertBirthday(b);
-    scheduleReminders();
-    toast({ title: editing ? "Updated" : "Added 🎉" });
-    onClose();
+    if (!user) return;
+    setBusy(true);
+    try {
+      const b: Birthday = {
+        id: editing?.id ?? crypto.randomUUID(),
+        name: name.trim(),
+        date,
+        photo,
+        notes: notes.trim() || undefined,
+        createdAt: editing?.createdAt ?? Date.now(),
+      };
+      await birthdayApi.upsert(b, user.id);
+      toast({ title: editing ? "Updated" : "Added 🎉" });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Couldn't save", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -218,8 +234,8 @@ function BirthdayDialog({ editing, onClose }: { editing: Birthday | null; onClos
           <Label>Private notes</Label>
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Loves matcha…" rows={2} />
         </div>
-        <Button onClick={save} className="w-full gradient-primary text-primary-foreground">
-          {editing ? "Save changes" : "Add birthday"}
+        <Button onClick={save} disabled={busy} className="w-full gradient-primary text-primary-foreground">
+          {busy ? "Saving…" : editing ? "Save changes" : "Add birthday"}
         </Button>
       </div>
     </DialogContent>

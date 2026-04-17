@@ -1,25 +1,28 @@
-import { Bell, Crown, Sparkles } from "lucide-react";
+import { Bell, Crown, LogOut, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useBirthdays, usePrefs, useProfile } from "@/hooks/useStorage";
-import { storage } from "@/lib/storage";
-import { requestNotificationPermission, scheduleReminders } from "@/lib/reminders";
+import { useBirthdays, usePrefs, useProfile, profileApi, prefsApi } from "@/hooks/useData";
+import { useAuth } from "@/hooks/useAuth";
+import { requestNotificationPermission } from "@/lib/reminders";
 import { toast } from "@/hooks/use-toast";
 
 export default function Profile() {
-  const [profile, refreshProfile] = useProfile();
-  const [prefs, refreshPrefs] = usePrefs();
-  const [birthdays] = useBirthdays();
+  const { user, role, signOut } = useAuth();
+  const { data: profile, refresh: refreshProfile } = useProfile();
+  const { data: prefs, refresh: refreshPrefs } = usePrefs();
+  const { data: birthdays } = useBirthdays();
 
-  const updateProfile = (patch: Partial<typeof profile>) => {
-    storage.setProfile({ ...profile, ...patch });
+  if (!profile || !prefs || !user) return null;
+
+  const updateProfile = async (patch: Partial<typeof profile>) => {
+    await profileApi.update(user.id, patch);
     refreshProfile();
   };
-  const updatePrefs = (patch: Partial<typeof prefs>) => {
-    storage.setPrefs({ ...prefs, ...patch });
+  const updatePrefs = async (patch: Partial<typeof prefs>) => {
+    await prefsApi.update(user.id, patch);
     refreshPrefs();
   };
 
@@ -32,14 +35,18 @@ export default function Profile() {
       }
     }
     updatePrefs({ notificationsEnabled: v });
-    if (v) scheduleReminders();
   };
 
   return (
     <div className="container py-6 md:py-10 max-w-3xl space-y-6">
-      <div>
-        <h1 className="font-display text-2xl md:text-4xl font-bold">Profile</h1>
-        <p className="text-sm text-muted-foreground">Make ChopCake feel like yours.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-2xl md:text-4xl font-bold">Profile</h1>
+          <p className="text-sm text-muted-foreground">Make ChopCake feel like yours.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={signOut}>
+          <LogOut className="h-4 w-4" /> Sign out
+        </Button>
       </div>
 
       <Card className="p-5 bg-card-elevated border-border/60 flex items-center gap-4">
@@ -48,7 +55,16 @@ export default function Profile() {
         </div>
         <div className="flex-1">
           <Label className="text-xs text-muted-foreground">Display name</Label>
-          <Input value={profile.displayName} onChange={(e) => updateProfile({ displayName: e.target.value })} className="mt-1" />
+          <Input
+            value={profile.displayName}
+            onChange={(e) => refreshProfile()}
+            onBlur={(e) => updateProfile({ displayName: e.target.value })}
+            defaultValue={profile.displayName}
+            className="mt-1"
+          />
+          <div className="text-[11px] text-muted-foreground mt-1 truncate">
+            {user.email} {role === "admin" && <span className="ml-1 px-1.5 py-0.5 rounded bg-primary/20 text-primary font-semibold">ADMIN</span>}
+          </div>
         </div>
       </Card>
 
@@ -71,8 +87,8 @@ export default function Profile() {
             type="number"
             min={0}
             max={23}
-            value={prefs.reminderHour}
-            onChange={(e) => updatePrefs({ reminderHour: Math.min(23, Math.max(0, Number(e.target.value))) })}
+            defaultValue={prefs.reminderHour}
+            onBlur={(e) => updatePrefs({ reminderHour: Math.min(23, Math.max(0, Number(e.target.value))) })}
             className="w-20 text-center"
           />
         </Row>
